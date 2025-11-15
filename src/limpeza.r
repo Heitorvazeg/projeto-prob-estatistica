@@ -27,7 +27,8 @@ if (inherits(pnad, "svyrep.design")) {
 dir.create("data/clean", recursive = TRUE, showWarnings = FALSE)
 
 # --- Seleção de variáveis ---
-selected_vars <- c("UF","V2007","V2009","VD3004","VD3006","VD4002","VD4011","VD4017","VD4013")
+selected_vars <- c("UF","V2007","V2009","VD3004","VD3006","VD4002","VD4011","VD4017","VD4013",
+                   "UPA", "Estrato", "V1032")
 present_vars <- intersect(selected_vars, names(df))
 df_clean <- df %>% select(all_of(present_vars))
 
@@ -81,7 +82,7 @@ df_clean <- df_clean %>%
       UF %in% c("Mato Grosso","Mato Grosso do Sul","Goiás","Distrito Federal") ~ "Centro-Oeste",
       TRUE ~ NA_character_
     ),
-    Anos_estudo = case_when(
+    Faixa_Anos_Estudo = case_when(
       Anos_estudo == 1 ~ "Menos de 1 ano de estudo ou sem instrução",
       Anos_estudo == 2 ~ "1 a 4 anos de estudo",
       Anos_estudo == 3 ~ "5 a 8 anos de estudo",
@@ -90,7 +91,7 @@ df_clean <- df_clean %>%
       Anos_estudo == 6 ~ "16 ou mais anos de estudo",
       TRUE ~ NA_character_
     ),
-    Horas_trabalho_semanais = case_when(
+    Faixa_Horas_Trabalho = case_when(
       Horas_trabalho_semanais == 1 ~ "Até 14 horas",
       Horas_trabalho_semanais == 2 ~ "15 a 39 horas",
       Horas_trabalho_semanais == 3 ~ "40 a 44 horas",

@@ -1,5 +1,158 @@
----
-title: "Análise_Estatística_PNAD"
-output: html_document
----
+|  |
+|----|
+| title: "Análise_Estatística_PNAD" |
+| author: Walisson Fagundes, Tulio Vittorete, Finéias, Heitor Vaz, Gustavo Henrique |
+| output: pdf_document |
 
+```{r setup, include=FALSE}
+library(PNADcIBGE)
+library(dplyr)
+library(survey)
+library(ggplot2)
+library(knitr)
+library(tidyr)
+```
+
+```{r carregaDados, include=FALSE}
+dados_limpos <- readRDS("data/clean/pnad_2022_q4_clean.rds")
+dados_pnad_survey <- pnadc_design(data_pnad = dados_limpos)
+```
+
+```{r analiseQualitativa, echo=FALSE, fig.align='center'}
+
+vars_quali <- c("Regiao", "Sexo", "Grau_instrucao", "Condicao_ocup", "Faixa_Anos_Estudo", "Faixa_Horas_Trabalho")
+cat("Tabelas de Proporção para Variáveis Qualitativas:\n\n")
+
+# Usamos 'lapply' (um loop) para aplicar a mesma função a cada item da nossa lista
+tabelas <- lapply(vars_quali, function(var) {
+
+  formula <- as.formula(paste("~", var))
+
+  tabela <- svytable(formula, design = dados_pnad_survey)
+
+  tabela_prop <- prop.table(tabela)
+  
+  # Imprimimos a tabela formatada com kable
+  cat(paste("\n--- Tabela para:", var, "---\n"))
+  print(knitr::kable(tabela_prop, digits = 4))
+})
+
+# --- 3. Gerar Gráfico Agrupado (via Facet_Wrap) ---
+df_vars <- dados_pnad_survey$variables
+
+
+df_vars$pesos <- weights(dados_pnad_survey)
+
+
+df_long <- df_vars %>%
+
+  select(all_of(vars_quali), pesos) %>%
+
+  pivot_longer(cols = -pesos, 
+               names_to = "Variavel", 
+               values_to = "Categoria") %>%
+
+  filter(!is.na(Categoria))
+
+df_plot <- df_long %>%
+  group_by(Variavel, Categoria) %>%
+  summarise(Total_Estimado = sum(pesos)) %>%
+  mutate(Prop = Total_Estimado / sum(Total_Estimado))
+
+cat("\n\nGráfico Agrupado para Variáveis Qualitativas:\n")
+ggplot(df_plot, aes(y = Categoria, x = Total_Estimado)) +
+  geom_col(fill = "steelblue") + 
+  facet_wrap(~Variavel, scales = "free") +
+  labs(title = "Gráfico 1: Distribuição de Variáveis Qualitativas",
+       x = "População Estimada", y = "Categorias") +
+  theme_minimal()
+```
+
+```{r analiseQuantitativa, echo=FALSE, fig.align='center', fig.width=8, fig.height=12}
+#ANALISE DAS VARIÀVEIS QUANTITATIVAS
+
+# --- 1. Definir as variáveis que queremos analisar ---
+vars_quant <- c("Idade", "Rendimento", "Anos_estudo", "Horas_trabalho_semanais")
+
+# --- 2. Gerar Tabela de Medidas Descritivas ---
+cat("Tabela 3: Medidas Descritivas para Variáveis Quantitativas\n\n")
+
+# Média
+cat("--- Médias ---\n")
+formula_mean <- as.formula(paste("~", paste(vars_quant, collapse = " + ")))
+print(svymean(formula_mean, design = dados_pnad_survey, na.rm = TRUE))
+
+# Mediana, Mín, Máx e Quartis
+cat("\n--- Quartis (Min, Q1, Mediana, Q3, Max) ---\n")
+formula_quant <- as.formula(paste("~", paste(vars_quant, collapse = " + ")))
+print(svyquantile(formula_quant, design = dados_pnad_survey, 
+                  quantiles = c(0, 0.25, 0.5, 0.75, 1), # 0=Min, 0.5=Mediana, 1=Max
+                  na.rm = TRUE))
+
+# --- 3. Gerar Grade de Gráficos (Histogramas e Boxplots) ---
+cat("\nGráficos Agrupados para Variáveis Quantitativas:\n")
+
+# Configura o layout do gráfico para 4 linhas e 2 colunas
+par(mfrow = c(4, 2))
+
+# --- Gráficos para Idade ---
+svyhist(~Idade, design = dados_pnad_survey,
+        main = "Gráfico 2: Histograma de Idade",
+        xlab = "Idade", col = "lightblue", border = "black")
+svyboxplot(Idade ~ 1, design = dados_pnad_survey,
+           main = "Gráfico 3: Boxplot de Idade",
+           col = "lightgray")
+
+# --- Gráficos para Rendimento ---
+svyhist(~Rendimento, design = dados_pnad_survey,
+        main = "Gráfico 4: Histograma de Rendimento",
+        xlab = "Rendimento", col = "lightblue", border = "black")
+svyboxplot(Rendimento ~ 1, design = dados_pnad_survey,
+           main = "Gráfico 5: Boxplot de Rendimento",
+           col = "lightgray")
+
+# --- Gráficos para Anos de Estudo ---
+svyhist(~Anos_estudo, design = dados_pnad_survey,
+        main = "Gráfico 6: Histograma de Anos de Estudo",
+        xlab = "Anos de Estudo", col = "lightblue", border = "black")
+svyboxplot(Anos_estudo ~ 1, design = dados_pnad_survey,
+           main = "Gráfico 7: Boxplot de Anos de Estudo",
+           col = "lightgray")
+
+# --- Gráficos para Horas de Trabalho ---
+svyhist(~Horas_trabalho_semanais, design = dados_pnad_survey,
+        main = "Gráfico 8: Histograma de Horas Trabalhadas",
+        xlab = "Horas por Semana", col = "lightblue", border = "black")
+svyboxplot(Horas_trabalho_semanais ~ 1, design = dados_pnad_survey,
+           main = "Gráfico 9: Boxplot de Horas Trabalhadas",
+           col = "lightgray")
+
+# Reseta o layout do gráfico para o padrão (1x1)
+par(mfrow = c(1, 1))
+```
+
+## Análise da Regressão Linear
+
+```{r regressaoLinear, echo=FALSE, fig.align='center'}
+
+# --- 1. Calcular a Regressão Linear (Ponderada) ---
+modelo_regressao <- svyglm(Rendimento ~ Anos_estudo, 
+                           design = dados_pnad_survey)
+
+# --- 2. Exibir o Resumo da Análise ---
+cat("Tabela 4: Resumo do Modelo de Regressão Linear\n")
+summary(modelo_regressao)
+
+cat("\nGráfico 10: Gráfico de Dispersão com Linha de Regressão\n")
+
+df_plot_reg <- dados_pnad_survey$variables
+df_plot_reg$pesos <- weights(dados_pnad_survey)
+
+ggplot(df_plot_reg, aes(x = Anos_estudo, y = Rendimento)) +
+  geom_point(alpha = 0.05, col = "black") + 
+  geom_smooth(method = "lm", aes(weight = pesos), color = "red", se = FALSE) +
+  labs(title = "Relação entre Rendimento e Anos de Estudo",
+       x = "Anos de Estudo (Quantitativo)",
+       y = "Rendimento Habitual (R$)") +
+  theme_minimal()
+  ```
