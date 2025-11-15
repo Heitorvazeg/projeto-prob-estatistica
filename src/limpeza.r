@@ -1,6 +1,7 @@
 library(dplyr)
 library(readr)
 library(stringr)
+library(haven)  # Para lidar com labelled
 
 # --- Carregar PNADC raw ---
 raw_path <- "data/raw/pnad_2022_q4_raw.rds"
@@ -26,7 +27,7 @@ if (inherits(pnad, "svyrep.design")) {
 dir.create("data/clean", recursive = TRUE, showWarnings = FALSE)
 
 # --- Seleção de variáveis ---
-selected_vars <- c("UF","V2007","V2009","V3002","VD3004","VD4002","VD4015","VD4019","V4012")
+selected_vars <- c("UF","V2007","V2009","VD3004","VD3006","VD4002","VD4011","VD4017","VD4013")
 present_vars <- intersect(selected_vars, names(df))
 df_clean <- df %>% select(all_of(present_vars))
 
@@ -34,29 +35,36 @@ df_clean <- df %>% select(all_of(present_vars))
 df_clean <- df_clean %>% rename(
   Sexo = V2007,
   Idade = V2009,
-  Grau_instrucao = V3002,
-  Anos_estudo = VD3004,
+  Grau_instrucao = VD3004,
+  Anos_estudo = VD3006,
   Condicao_ocup = VD4002,
-  Cat_ocup = VD4015,
-  Rendimento = VD4019,
-  Horas_trabalho = V4012
+  Cat_ocup = VD4011,
+  Rendimento = VD4017,
+  Horas_trabalho_semanais = VD4013
 )
 
-# --- Ajustes nos fatores já com labels ---
+# --- Ajustes de tipos ---
 df_clean <- df_clean %>%
   mutate(
-    # Apenas ocupados
-    Condicao_ocup = as.character(Condicao_ocup),
-    Rendimento = as.numeric(Rendimento),
+    # Converte labelled para factor, depois character
+    Grau_instrucao = as.character(as_factor(Grau_instrucao)),
+    Condicao_ocup = as.character(as_factor(Condicao_ocup)),
+    Cat_ocup = as.character(as_factor(Cat_ocup)),
+    Sexo = as.character(as_factor(Sexo)),
+    UF = as.character(as_factor(UF)),
+    
+    # Numéricas
     Idade = as.numeric(Idade),
-    Horas_trabalho = as.numeric(Horas_trabalho)
+    Anos_estudo = as.numeric(Anos_estudo),
+    Rendimento = as.numeric(Rendimento),
+    Horas_trabalho_semanais = as.numeric(Horas_trabalho_semanais)
   ) %>%
-  filter(Condicao_ocup == "Pessoas ocupadas") %>%
+  # Filtros plausíveis
   filter(!is.na(Rendimento) & Rendimento > 0) %>%
   filter(Idade >= 10 & Idade <= 100) %>%
-  filter(!is.na(Horas_trabalho) & Horas_trabalho >= 0 & Horas_trabalho <= 120)
+  filter(!is.na(Horas_trabalho_semanais) & Horas_trabalho_semanais >= 0 & Horas_trabalho_semanais <= 120)
 
-# --- Variáveis derivadas ---
+# --- Variáveis derivadas e dados a partir dos códigos---
 df_clean <- df_clean %>%
   mutate(
     Faixa_Idade = case_when(
@@ -72,14 +80,40 @@ df_clean <- df_clean %>%
       UF %in% c("Paraná","Santa Catarina","Rio Grande do Sul") ~ "Sul",
       UF %in% c("Mato Grosso","Mato Grosso do Sul","Goiás","Distrito Federal") ~ "Centro-Oeste",
       TRUE ~ NA_character_
+    ),
+    Anos_estudo = case_when(
+      Anos_estudo == 1 ~ "Menos de 1 ano de estudo ou sem instrução",
+      Anos_estudo == 2 ~ "1 a 4 anos de estudo",
+      Anos_estudo == 3 ~ "5 a 8 anos de estudo",
+      Anos_estudo == 4 ~ "9 a 11 anos de estudo",
+      Anos_estudo == 5 ~ "12 a 15 anos de estudo",
+      Anos_estudo == 6 ~ "16 ou mais anos de estudo",
+      TRUE ~ NA_character_
+    ),
+    Horas_trabalho_semanais = case_when(
+      Horas_trabalho_semanais == 1 ~ "Até 14 horas",
+      Horas_trabalho_semanais == 2 ~ "15 a 39 horas",
+      Horas_trabalho_semanais == 3 ~ "40 a 44 horas",
+      Horas_trabalho_semanais == 4 ~ "45 a 48 horas",
+      Horas_trabalho_semanais == 5 ~ "49 horas ou mais",
+      TRUE ~ NA_character_
     )
   )
+
+# --- Winsorizar Rendimento ---
+if ("Rendimento" %in% names(df_clean)) {
+  qnts <- quantile(df_clean$Rendimento, probs = c(0.01, 0.99), na.rm = TRUE)
+  p1 <- qnts[1]; p99 <- qnts[2]
+  df_clean <- df_clean %>%
+    mutate(Rendimento = pmin(pmax(Rendimento, p1), p99))
+  message("Rendimento winsorizado com p1=", round(p1,2), " e p99=", round(p99,2))
+}
 
 # --- Salvar RDS e CSV ---
 saveRDS(df_clean, "data/clean/pnad_2022_q4_clean.rds")
 write_csv(df_clean, "data/clean/pnad_2022_q4_clean.csv")
 
-# --- Mensagem ---
+# --- Mensagem final ---
 message("Limpeza concluída!")
 message("Linhas: ", nrow(df_clean), ", Colunas: ", ncol(df_clean))
 if(file.exists("data/clean/pnad_2022_q4_clean.rds")) message("RDS criado com sucesso!")
