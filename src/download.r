@@ -1,6 +1,6 @@
 library(PNADcIBGE)
 
-pnad <- get_pnadc(year=2022, quarter=4)
+pnad <- get_pnadc(year=2022, quarter=4, design=TRUE)
 
 ir.create("data/raw", recursive = TRUE, showWarnings = FALSE)
 

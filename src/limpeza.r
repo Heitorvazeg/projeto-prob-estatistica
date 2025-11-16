@@ -26,11 +26,19 @@ if (inherits(pnad, "svyrep.design")) {
 # --- Criar pasta de saída ---
 dir.create("data/clean", recursive = TRUE, showWarnings = FALSE)
 
-# --- Seleção de variáveis ---
-selected_vars <- c("UF","V2007","V2009","VD3004","VD3006","VD4002","VD4011","VD4017","VD4013",
-                   "UPA", "Estrato", "V1032")
+# --- Lista de variáveis —
+selected_vars <- c(
+  "UPA", "Estrato",
+  "UF","V2007","V2009","VD3004","VD3006",
+  "VD4002","VD4011","VD4017","VD4013"
+)
+
+# --- Criar coluna Peso correta ---
+df$Peso <- as.numeric(df$V1033)
+
+# Selecionar as variáveis
 present_vars <- intersect(selected_vars, names(df))
-df_clean <- df %>% select(all_of(present_vars))
+df_clean <- df %>% select(all_of(present_vars), Peso)
 
 # --- Renomear variáveis ---
 df_clean <- df_clean %>% rename(
@@ -61,7 +69,7 @@ df_clean <- df_clean %>%
     Horas_trabalho_semanais = as.numeric(Horas_trabalho_semanais)
   ) %>%
   # Filtros plausíveis
-  filter(!is.na(Rendimento) & Rendimento > 0) %>%
+  filter(!is.na(Rendimento) & Rendimento > 0 & Rendimento < 20000) %>%
   filter(Idade >= 10 & Idade <= 100) %>%
   filter(!is.na(Horas_trabalho_semanais) & Horas_trabalho_semanais >= 0 & Horas_trabalho_semanais <= 120)
 
