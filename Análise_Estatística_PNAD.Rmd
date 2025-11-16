@@ -1,8 +1,8 @@
-|  |
-|----|
-| title: "Análise_Estatística_PNAD" |
-| author: Walisson Fagundes, Tulio Vittorete, Finéias, Heitor Vaz, Gustavo Henrique |
-| output: pdf_document |
+---
+title: "Análise_Estatística_PNAD"
+author: "Walisson Fagundes, Tulio Vittorete, Finéias, Heitor Vaz, Gustavo Henrique"
+output: pdf_document
+---
 
 ```{r setup, include=FALSE}
 library(PNADcIBGE)
@@ -15,7 +15,13 @@ library(tidyr)
 
 ```{r carregaDados, include=FALSE}
 dados_limpos <- readRDS("data/clean/pnad_2022_q4_clean.rds")
-dados_pnad_survey <- pnadc_design(data_pnad = dados_limpos)
+dados_pnad_survey <- svydesign(
+  ids = ~UPA,
+  strata = ~Estrato,
+  weights = ~Peso,
+  data = dados_limpos,
+  nest = TRUE
+)
 ```
 
 ```{r analiseQualitativa, echo=FALSE, fig.align='center'}
@@ -155,4 +161,4 @@ ggplot(df_plot_reg, aes(x = Anos_estudo, y = Rendimento)) +
        x = "Anos de Estudo (Quantitativo)",
        y = "Rendimento Habitual (R$)") +
   theme_minimal()
-  ```
+```
