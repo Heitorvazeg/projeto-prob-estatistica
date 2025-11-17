@@ -1,7 +1,7 @@
 ---
 title: "Análise_Estatística_PNAD"
 author: "Walisson Fagundes, Tulio Vittorete, Finéias, Heitor Vaz, Gustavo Henrique"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
