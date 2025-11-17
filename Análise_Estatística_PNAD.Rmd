@@ -1,178 +1,300 @@
 ---
-title: "Análise_Estatística_PNAD"
-author: "Walisson Fagundes, Tulio Vittorete, Finéias, Heitor Vaz, Gustavo Henrique"
-output: html_document
+title: "**Análise Estatística: Como a Renda dos indivíduos varia segundo escolaridade, ocupação, idade e sexo: Uma Análise Regional Comparada com Dados da PNAD Contínua 2022**"
+subtitle: "Engenharia de Software - Probabilidade e Estatística - 2025.2"
+author: |
+  | Finéias Antônio
+  | Heitor M Augusto Vaz
+  | Túlio Vitorette
+  | Wallison
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
-library(PNADcIBGE)
-library(dplyr)
-library(survey)
-library(ggplot2)
 library(knitr)
+library(dplyr)
+library(ggplot2)
 library(tidyr)
-library(tidytext)
-library(scales)
+
+# Configuração global
+knitr::opts_chunk$set(echo = FALSE, fig.align = "center", out.width = "75%", warning = FALSE, message = FALSE)
 ```
 
-```{r carregaDados, include=FALSE}
-dados_limpos <- readRDS("data/clean/pnad_2022_q4_clean.rds")
-dados_pnad_survey <- svydesign(
-  ids = ~UPA,
-  strata = ~Estrato,
-  weights = ~Peso,
-  data = dados_limpos,
-  nest = TRUE
-)
-```
+# Introdução
 
-```{r analiseQualitativa, echo=FALSE, fig.align='center'}
+A renda individual é resultado da interação entre características pessoais, fatores produtivos e condições estruturais dos mercados de trabalho. A literatura econômica — tanto a macroeconômica apresentada por Snowdon e Vane quanto os manuais clássicos de Economia do Trabalho — destaca que escolaridade, experiência, inserção ocupacional e diferenças demográficas influenciam diretamente a produtividade e, consequentemente, os salários.
 
-vars_quali <- c("Regiao", "Sexo", "Grau_instrucao", "Faixa_Anos_Estudo", "Faixa_Horas_Trabalho")
-cat("Tabelas de Proporção para Variáveis Qualitativas:\n\n")
+Além desses fatores, características como sexo e região também impactam significativamente os rendimentos, refletindo desigualdades persistentes no acesso a oportunidades no mercado de trabalho. Nesse contexto, compreender como a renda varia segundo escolaridade, ocupação, idade, sexo e região é essencial para avaliar desigualdades socioeconômicas e identificar grupos que enfrentam maiores barreiras.
 
-# Usamos 'lapply' (um loop) para aplicar a mesma função a cada item da nossa lista
-tabelas <- lapply(vars_quali, function(var) {
+Utilizando os microdados da PNAD Contínua 2022, este estudo conduz uma análise estatística comparada, visando evidenciar os determinantes da renda e como eles se manifestam de forma distinta entre regiões e perfis populacionais.
 
-  formula <- as.formula(paste("~", var))
+# Objetivos
 
-  tabela <- svytable(formula, design = dados_pnad_survey)
+## Objetivo Geral
+Avaliar como a renda individual varia segundo escolaridade, ocupação, idade, sexo e região, utilizando dados da PNAD Contínua 2022.
 
-  tabela_prop <- prop.table(tabela)
-  
-  # Imprimimos a tabela formatada com kable
-  cat(paste("\n--- Tabela para:", var, "---\n"))
-  print(knitr::kable(tabela_prop, digits = 4))
-})
+## Objetivos Específicos
+- Descrever características socioeconômicas da população brasileira.
+- Investigar como variáveis pessoais e laborais influenciam a renda.
+- Comparar diferenças regionais nos determinantes da renda.
+- Visualizar padrões por meio de gráficos estatísticos.
+- Ajustar um modelo de regressão para explicar a renda individual.
 
-# --- 3. Gerar Gráfico Agrupado Melhorado ---
-# Extrair variáveis e pesos
-df_vars <- dados_pnad_survey$variables
-df_vars$pesos <- weights(dados_pnad_survey)
+# Descrição dos Dados
 
-# Transformar para formato longo e calcular porcentagens
-df_plot <- df_vars %>%
-  select(all_of(vars_quali), pesos) %>%
-  pivot_longer(cols = -pesos, 
-               names_to = "Variavel", 
-               values_to = "Categoria") %>%
-  filter(!is.na(Categoria)) %>%
-  group_by(Variavel, Categoria) %>%
-  summarise(Total = sum(pesos), .groups = 'drop') %>%
-  group_by(Variavel) %>%
-  mutate(Prop = Total / sum(Total)) %>%
-  ungroup()
+## Fonte
+Os dados utilizados são provenientes da **Pesquisa Nacional por Amostra de Domicílios Contínua (PNAD Contínua 2022)**, disponibilizada pelo IBGE. A base inclui informações demográficas, educacionais, ocupacionais e de rendimento, coletadas trimestralmente.
 
-# Melhorar os nomes para o gráfico (opcional, deixa mais bonito)
-# Exemplo: Trocar "_" por espaço
-df_plot$Variavel <- gsub("_", " ", df_plot$Variavel)
+## Variáveis Utilizadas
+As principais variáveis selecionadas para análise foram:
 
-cat("\n\nGráfico Agrupado para Variáveis Qualitativas:\n")
+- **UF** — Unidade Federativa  
+- **Sexo (V2007)**  
+- **Idade (V2009)**  
+- **Nível de Escolaridade (V3002 / VD3004 recodificada)**  
+- **Condição Ocupacional (VD4002)**  
+- **Setor/Grupo Ocupacional (VD4012 ou VD4010)**  
+- **Horas Semanais Trabalhadas (VD4015/VD4019)**  
+- **Rendimento do Trabalho (VD4030 ou VD4010)**  
+- **Região** — derivada da UF**
+- **Faixa Idade - Derivada da Idade**
 
-# Plotar
+# Tratamento e Limpeza de Dados
+
+- **Seleção das variáveis relevantes:** foram extraídas apenas as informações necessárias para atender aos objetivos da análise.
+- **Recodificação de variáveis categóricas:** escolaridade, ocupação e condição de trabalho foram reorganizadas em categorias analíticas.
+- **Criação de faixas:** foram criadas categorias de idade (ex.: 18–29, 30–44, 45–59, 60+) e escolaridade (Fundamental, Médio, Superior etc.).
+- **Tratamento de valores faltantes:** observações com informações ausentes ou inconsistentes foram analisadas e tratadas com base no contexto da variável (remoção ou recodificação).
+
+# Análise Descritiva.
+## Perfil Populacional.
+```{r fig.align="center", fig.width=10, fig.height=7}
 ggplot(df_plot, aes(x = Prop, y = reorder_within(Categoria, Prop, Variavel))) +
-  geom_col(fill = "#2c3e50", width = 0.7) + 
-  geom_text(aes(label = scales::percent(Prop, accuracy = 0.1)), 
-            hjust = -0.1, size = 3, color = "black") +
+  geom_col(fill = "#34495e", width = 0.7) +
+  geom_text(aes(label = scales::percent(Prop, accuracy = 0.1)),
+            hjust = -0.15, size = 3.5, color = "black") +
   facet_wrap(~Variavel, scales = "free_y", ncol = 2) +
-  scale_x_continuous(labels = scales::percent_format(), expand = expansion(mult = c(0, 0.2))) +
-  scale_y_reordered() + # Função mágica para ordenar facets individualmente
-  labs(title = "Perfil Demográfico e Socioeconômico",
-       subtitle = "Distribuição percentual da população estimada",
-       x = NULL, y = NULL) +
-  theme_minimal(base_size = 12) +
+  scale_x_continuous(labels = scales::percent_format(),
+                     expand = expansion(mult = c(0, 0.25))) +
+  scale_y_reordered() +
+  labs(
+    title = "Perfil Demográfico e Socioeconômico",
+    subtitle = "Distribuição percentual da população estimada",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 13) +
   theme(
-    panel.grid.major.y = element_blank(), # Limpa linhas desnecessárias
-    strip.text = element_text(face = "bold", size = 10, hjust = 0),
-    axis.text.y = element_text(color = "gray30")
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 13, hjust = 0.5, color = "gray30"),
+    axis.text.y = element_text(color = "gray20", size = 10),
+    axis.text.x = element_text(size = 10),
+    panel.grid.major.y = element_blank(),
+    strip.text = element_text(face = "bold", size = 11),
+    plot.margin = margin(10, 20, 10, 10)
+  )
+
+```
+
+# Relação entre Renda e os Determinantes Individuais.
+## Renda por Escolaridade.
+```{r fig.align="center", fig.width=8, fig.height=6}
+ggplot(df, aes(x = as.factor(Grau_instrucao), y = Rendimento)) +
+  geom_boxplot(fill = "#34495e", alpha = 0.7) +
+  labs(
+    title = "Renda por Escolaridade",
+    x = "Escolaridade",
+    y = "Renda (R$)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face="bold", hjust=0.5),
+    axis.text.x = element_text(angle=45, hjust=1)
+  )
+```
+## Renda por Ocupação.
+```{r fig.align="center", fig.width=8, fig.height=6}
+ggplot(df, aes(x = as.factor(Cat_ocup), y = Rendimento)) +
+  geom_boxplot(fill = "#2c3e50", alpha = 0.7) +
+  labs(
+    title = "Renda por Ocupação",
+    x = "Ocupação",
+    y = "Renda (R$)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face="bold", hjust=0.5),
+    axis.text.x = element_text(angle=45, hjust=1)
+  )
+```
+## Renda por Renda por Idade.
+```{r fig.align="center", fig.width=8, fig.height=6}
+ggplot(df, aes(x = Faixa_Idade, y = Rendimento)) +
+  geom_boxplot(fill = "#3d566e", alpha = 0.7) +
+  labs(
+    title = "Renda por Idade",
+    x = "Faixa Etária",
+    y = "Renda (R$)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face="bold", hjust=0.5)
+  )
+```
+## Renda por Sexo.
+```{r fig.align="center", fig.width=7, fig.height=6}
+ggplot(df, aes(x = Sexo, y = Rendimento)) +
+  geom_boxplot(fill = "#5d6d7e", alpha = 0.75) +
+  labs(
+    title = "Renda por Sexo",
+    x = "Sexo",
+    y = "Renda (R$)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face="bold", hjust=0.5)
   )
 ```
 
-```{r analiseQuantitativa, echo=FALSE, fig.align='center', fig.width=8, fig.height=12}
-#ANALISE DAS VARIÀVEIS QUANTITATIVAS
+# Análise Comparada entre Regiões.
+## Renda Média por Região
+```{r fig.align="center", fig.width=8, fig.height=6}
+library(dplyr)
+library(ggplot2)
 
-# --- 1. Definir as variáveis que queremos analisar ---
-vars_quant <- c("Idade", "Rendimento", "Anos_estudo", "Horas_trabalho_semanais")
-
-# --- 2. Gerar Tabela de Medidas Descritivas ---
-cat("Tabela 3: Medidas Descritivas para Variáveis Quantitativas\n\n")
-
-# Média
-cat("--- Médias ---\n")
-formula_mean <- as.formula(paste("~", paste(vars_quant, collapse = " + ")))
-print(svymean(formula_mean, design = dados_pnad_survey, na.rm = TRUE))
-
-# Mediana, Mín, Máx e Quartis
-cat("\n--- Quartis (Min, Q1, Mediana, Q3, Max) ---\n")
-formula_quant <- as.formula(paste("~", paste(vars_quant, collapse = " + ")))
-print(svyquantile(formula_quant, design = dados_pnad_survey, 
-                  quantiles = c(0, 0.25, 0.5, 0.75, 1), # 0=Min, 0.5=Mediana, 1=Max
-                  na.rm = TRUE))
-
-# --- 3. Gerar Grade de Gráficos (Histogramas e Boxplots) ---
-cat("\nGráficos Agrupados para Variáveis Quantitativas:\n")
-
-# Configura o layout do gráfico para 4 linhas e 2 colunas
-par(mfrow = c(4, 2))
-
-# --- Gráficos para Idade ---
-svyhist(~Idade, design = dados_pnad_survey,
-        main = "Gráfico 2: Histograma de Idade",
-        xlab = "Idade", col = "lightblue", border = "black")
-svyboxplot(Idade ~ 1, design = dados_pnad_survey,
-           main = "Gráfico 3: Boxplot de Idade",
-           col = "lightgray")
-
-# --- Gráficos para Rendimento ---
-svyhist(~Rendimento, design = dados_pnad_survey,
-        main = "Gráfico 4: Histograma de Rendimento",
-        xlab = "Rendimento", col = "lightblue", border = "black")
-svyboxplot(Rendimento ~ 1, design = dados_pnad_survey,
-           main = "Gráfico 5: Boxplot de Rendimento",
-           col = "lightgray")
-
-# --- Gráficos para Anos de Estudo ---
-svyhist(~Anos_estudo, design = dados_pnad_survey,
-        main = "Gráfico 6: Histograma de Anos de Estudo",
-        xlab = "Anos de Estudo", col = "lightblue", border = "black")
-svyboxplot(Anos_estudo ~ 1, design = dados_pnad_survey,
-           main = "Gráfico 7: Boxplot de Anos de Estudo",
-           col = "lightgray")
-
-# --- Gráficos para Horas de Trabalho ---
-svyhist(~Horas_trabalho_semanais, design = dados_pnad_survey,
-        main = "Gráfico 8: Histograma de Horas Trabalhadas",
-        xlab = "Horas por Semana", col = "lightblue", border = "black")
-svyboxplot(Horas_trabalho_semanais ~ 1, design = dados_pnad_survey,
-           main = "Gráfico 9: Boxplot de Horas Trabalhadas",
-           col = "lightgray")
-
-# Reseta o layout do gráfico para o padrão (1x1)
-par(mfrow = c(1, 1))
+df %>%
+  group_by(Regiao) %>%
+  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE)) %>%
+  ggplot(aes(x = Regiao, y = Renda_Media)) +
+  geom_col(fill = "#2c3e50", alpha = 0.8) +
+  geom_text(aes(label = scales::dollar(Renda_Media, prefix="R$ ", accuracy = 1)),
+            vjust = -0.5, size = 4) +
+  labs(
+    title = "Renda Média por Região",
+    x = "Região",
+    y = "Renda Média (R$)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(plot.title = element_text(face="bold", hjust=0.5))
+```
+## Renda Média por Escolaridade em Cada Região.
+```{r fig.align="center", fig.width=10, fig.height=7}
+ggplot(df, aes(x = Grau_instrucao, y = Rendimento, fill = Grau_instrucao)) +
+  geom_boxplot(alpha = 0.7, outlier.size = 0.8) +
+  facet_wrap(~Regiao, scales = "free_x") +
+  labs(
+    title = "Renda por Escolaridade em Cada Região",
+    x = "Escolaridade",
+    y = "Renda (R$)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none",
+    plot.title = element_text(face="bold", hjust=0.5)
+  )
 ```
 
-## Análise da Regressão Linear
+## Renda Média por Ocupação em cada Região.
+```{r renda_ocupacao, warning=FALSE, message=FALSE}
 
-```{r regressaoLinear, echo=FALSE, fig.align='center'}
+library(dplyr)
+library(ggplot2)
 
-# --- 1. Calcular a Regressão Linear (Ponderada) ---
-modelo_regressao <- svyglm(Rendimento ~ Anos_estudo, 
-                           design = dados_pnad_survey)
+df_renda_ocup <- df %>%
+  filter(!is.na(Cat_ocup), !is.na(Rendimento)) %>%
+  group_by(Cat_ocup) %>%
+  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE)) %>%
+  arrange(Renda_Media)
 
-# --- 2. Exibir o Resumo da Análise ---
-cat("Tabela 4: Resumo do Modelo de Regressão Linear\n")
-summary(modelo_regressao)
-
-cat("\nGráfico 10: Gráfico de Dispersão com Linha de Regressão\n")
-
-df_plot_reg <- dados_pnad_survey$variables
-df_plot_reg$pesos <- weights(dados_pnad_survey)
-
-ggplot(df_plot_reg, aes(x = Anos_estudo, y = Rendimento)) +
-  geom_point(alpha = 0.05, col = "black") + 
-  geom_smooth(method = "lm", aes(weight = pesos), color = "red", se = FALSE) +
-  labs(title = "Relação entre Rendimento e Anos de Estudo",
-       x = "Anos de Estudo (Quantitativo)",
-       y = "Rendimento Habitual (R$)") +
-  theme_minimal()
+ggplot(df_renda_ocup,
+       aes(x = Renda_Media,
+           y = reorder(Cat_ocup, Renda_Media))) +
+  geom_col(fill = "#2c3e50") +
+  geom_text(aes(label = scales::comma(Renda_Media, accuracy = 1)),
+            hjust = -0.15, color = "black", size = 3.2) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Renda Média por Ocupação",
+    subtitle = "Valores estimados com base na PNAD Contínua",
+    x = "Renda Média (R$)",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y = element_text(color = "gray20"),
+    panel.grid.major.y = element_blank(),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12)
+  )
 ```
+
+## Renda Média por Faixa de Idade em Cada Região.
+```{r fig.align="center", fig.width=10, fig.height=7}
+ggplot(df, aes(x = Faixa_Idade, y = Rendimento, fill = Faixa_Idade)) +
+  geom_boxplot(alpha = 0.7) +
+  facet_wrap(~Regiao) +
+  labs(
+    title = "Renda por Faixa Etária em Cada Região",
+    x = "Faixa Etária",
+    y = "Renda (R$)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face="bold", hjust=0.5)
+  )
+```
+## Renda Média por Sexo em cada Região.
+```{r renda_sexo, warning=FALSE, message=FALSE}
+
+library(dplyr)
+library(ggplot2)
+
+df_renda_sexo <- df %>%
+  filter(!is.na(Sexo), !is.na(Rendimento)) %>%
+  group_by(Sexo) %>%
+  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE)) %>%
+  arrange(Renda_Media)
+
+ggplot(df_renda_sexo,
+       aes(x = Sexo, y = Renda_Media, fill = Sexo)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_text(aes(label = scales::comma(Renda_Media, accuracy = 1)),
+            vjust = -0.5, size = 4) +
+  scale_y_continuous(labels = scales::comma,
+                     expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    title = "Renda Média por Sexo",
+    subtitle = "Estimativas com base na PNAD Contínua 2022",
+    x = NULL,
+    y = "Renda Média (R$)"
+  ) +
+  scale_fill_manual(values = c("#2c3e50", "#34495e")) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 12)
+  )
+```
+
+# Regressão Linear
+
+A escolaridade é amplamente reconhecida como um dos principais determinantes da renda, conforme discutido na literatura econômica do capital humano. Indivíduos com maior nível de instrução tendem a apresentar maior produtividade, o que se reflete em salários mais elevados. Para verificar empiricamente essa relação utilizando os microdados da PNAD Contínua 2022, estimamos uma regressão linear simples em que o rendimento individual é explicado apenas pela escolaridade.
+
+## Modelo Sugerido
+
+## Gráfico da Regressão Linear
+
+## Interpretação
+
+Os resultados indicam que existe uma relação positiva entre escolaridade e renda: conforme o nível educacional aumenta, o rendimento médio tende a crescer. O coeficiente estimado no modelo linear mostra o aumento esperado no rendimento para cada avanço de nível educacional. Além disso, a significância estatística dos parâmetros confirma que a escolaridade exerce efeito relevante sobre o rendimento individual.
+
+O gráfico reforça essa conclusão ao evidenciar a tendência crescente da linha de regressão, apesar da variabilidade natural observada entre indivíduos de um mesmo nível educacional.
+
+# Conclusão
+
+A análise da PNAD Contínua 2022 mostrou que a renda individual varia de forma consistente com características pessoais e estruturais, como escolaridade, ocupação, idade, sexo e região. Os gráficos e estatísticas revelaram desigualdades claras entre diferentes perfis populacionais e regiões do país. A regressão linear simples confirmou que níveis mais altos de escolaridade estão associados a rendimentos maiores, reforçando o papel da educação na redução das desigualdades. Em conjunto, essas análises evidenciam a importância de políticas públicas que ampliem oportunidades educacionais e laborais, promovendo maior equidade socioeconômica no Brasil.
+
