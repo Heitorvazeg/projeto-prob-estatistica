@@ -11,6 +11,8 @@ library(survey)
 library(ggplot2)
 library(knitr)
 library(tidyr)
+library(tidytext)
+library(scales)
 ```
 
 ```{r carregaDados, include=FALSE}
@@ -26,7 +28,7 @@ dados_pnad_survey <- svydesign(
 
 ```{r analiseQualitativa, echo=FALSE, fig.align='center'}
 
-vars_quali <- c("Regiao", "Sexo", "Grau_instrucao", "Condicao_ocup", "Faixa_Anos_Estudo", "Faixa_Horas_Trabalho")
+vars_quali <- c("Regiao", "Sexo", "Grau_instrucao", "Faixa_Anos_Estudo", "Faixa_Horas_Trabalho")
 cat("Tabelas de Proporção para Variáveis Qualitativas:\n\n")
 
 # Usamos 'lapply' (um loop) para aplicar a mesma função a cada item da nossa lista
@@ -43,35 +45,47 @@ tabelas <- lapply(vars_quali, function(var) {
   print(knitr::kable(tabela_prop, digits = 4))
 })
 
-# --- 3. Gerar Gráfico Agrupado (via Facet_Wrap) ---
+# --- 3. Gerar Gráfico Agrupado Melhorado ---
+# Extrair variáveis e pesos
 df_vars <- dados_pnad_survey$variables
-
-
 df_vars$pesos <- weights(dados_pnad_survey)
 
-
-df_long <- df_vars %>%
-
+# Transformar para formato longo e calcular porcentagens
+df_plot <- df_vars %>%
   select(all_of(vars_quali), pesos) %>%
-
   pivot_longer(cols = -pesos, 
                names_to = "Variavel", 
                values_to = "Categoria") %>%
-
-  filter(!is.na(Categoria))
-
-df_plot <- df_long %>%
+  filter(!is.na(Categoria)) %>%
   group_by(Variavel, Categoria) %>%
-  summarise(Total_Estimado = sum(pesos)) %>%
-  mutate(Prop = Total_Estimado / sum(Total_Estimado))
+  summarise(Total = sum(pesos), .groups = 'drop') %>%
+  group_by(Variavel) %>%
+  mutate(Prop = Total / sum(Total)) %>%
+  ungroup()
+
+# Melhorar os nomes para o gráfico (opcional, deixa mais bonito)
+# Exemplo: Trocar "_" por espaço
+df_plot$Variavel <- gsub("_", " ", df_plot$Variavel)
 
 cat("\n\nGráfico Agrupado para Variáveis Qualitativas:\n")
-ggplot(df_plot, aes(y = Categoria, x = Total_Estimado)) +
-  geom_col(fill = "steelblue") + 
-  facet_wrap(~Variavel, scales = "free") +
-  labs(title = "Gráfico 1: Distribuição de Variáveis Qualitativas",
-       x = "População Estimada", y = "Categorias") +
-  theme_minimal()
+
+# Plotar
+ggplot(df_plot, aes(x = Prop, y = reorder_within(Categoria, Prop, Variavel))) +
+  geom_col(fill = "#2c3e50", width = 0.7) + 
+  geom_text(aes(label = scales::percent(Prop, accuracy = 0.1)), 
+            hjust = -0.1, size = 3, color = "black") +
+  facet_wrap(~Variavel, scales = "free_y", ncol = 2) +
+  scale_x_continuous(labels = scales::percent_format(), expand = expansion(mult = c(0, 0.2))) +
+  scale_y_reordered() + # Função mágica para ordenar facets individualmente
+  labs(title = "Perfil Demográfico e Socioeconômico",
+       subtitle = "Distribuição percentual da população estimada",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_blank(), # Limpa linhas desnecessárias
+    strip.text = element_text(face = "bold", size = 10, hjust = 0),
+    axis.text.y = element_text(color = "gray30")
+  )
 ```
 
 ```{r analiseQuantitativa, echo=FALSE, fig.align='center', fig.width=8, fig.height=12}
