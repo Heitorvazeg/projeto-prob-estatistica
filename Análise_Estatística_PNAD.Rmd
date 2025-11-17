@@ -3,9 +3,10 @@ title: "**Análise Estatística: Como a Renda dos indivíduos varia segundo esco
 subtitle: "Engenharia de Software - Probabilidade e Estatística - 2025.2"
 author: |
   | Finéias Antônio
+  | Gustavo Henrique
   | Heitor M Augusto Vaz
   | Túlio Vitorette
-  | Wallison
+  | Wallison Fagundes
 output: 
   pdf_document:
     latex_engine: pdflatex
@@ -17,6 +18,8 @@ library(knitr)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+
+df <- readRDS("data/clean/pnad_2022_q4_clean.rds")
 
 # Configuração global
 knitr::opts_chunk$set(echo = FALSE, fig.align = "center", out.width = "75%", warning = FALSE, message = FALSE)
@@ -58,8 +61,9 @@ As principais variáveis selecionadas para análise foram:
 - **Setor/Grupo Ocupacional (VD4012 ou VD4010)**  
 - **Horas Semanais Trabalhadas (VD4015/VD4019)**  
 - **Rendimento do Trabalho (VD4030 ou VD4010)**  
-- **Região** — derivada da UF**
+- **Região - derivada da UF**
 - **Faixa Idade - Derivada da Idade**
+- **Anos de Estudo (VD3006)**
 
 # Tratamento e Limpeza de Dados
 
@@ -71,38 +75,70 @@ As principais variáveis selecionadas para análise foram:
 # Análise Descritiva.
 ## Perfil Populacional.
 ```{r fig.align="center", fig.width=10, fig.height=7}
-ggplot(df_plot, aes(x = Prop, y = reorder_within(Categoria, Prop, Variavel))) +
+# Criar df_plot corretamente
+
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+df_plot <- bind_rows(
+  df %>%
+    count(Sexo) %>%
+    mutate(Prop = n / sum(n), Categoria = Sexo, Variavel = "Sexo"),
+
+  df %>%
+    count(Faixa_Idade) %>%
+    mutate(Prop = n / sum(n), Categoria = Faixa_Idade, Variavel = "Faixa Etária"),
+
+  df %>%
+    count(Grau_instrucao) %>%
+    mutate(Prop = n / sum(n), Categoria = Grau_instrucao, Variavel = "Escolaridade"),
+  
+  df %>%
+    count(Faixa_Anos_Estudo) %>%
+    mutate(Prop = n / sum(n), Categoria = Faixa_Anos_Estudo, Variavel = "Anos de Estudo"),
+
+  df %>%
+    count(Faixa_Horas_Trabalho) %>%
+    mutate(Prop = n / sum(n), Categoria = Faixa_Horas_Trabalho, Variavel = "Horas Trabalhadas"),
+
+  df %>%
+    count(Regiao) %>%
+    mutate(Prop = n / sum(n), Categoria = Regiao, Variavel = "Região")
+)
+
+df_plot$Categoria <- as.character(df_plot$Categoria)
+df_plot$Variavel <- factor(df_plot$Variavel, 
+                           levels = c("Sexo","Faixa Etária","Escolaridade","Anos de Estudo","Horas Trabalhadas","Região"))
+
+ggplot(df_plot, aes(x = Prop, y = reorder(Categoria, Prop))) +
   geom_col(fill = "#34495e", width = 0.7) +
-  geom_text(aes(label = scales::percent(Prop, accuracy = 0.1)),
-            hjust = -0.15, size = 3.5, color = "black") +
-  facet_wrap(~Variavel, scales = "free_y", ncol = 2) +
-  scale_x_continuous(labels = scales::percent_format(),
-                     expand = expansion(mult = c(0, 0.25))) +
-  scale_y_reordered() +
+  geom_text(aes(label = percent(Prop, accuracy = 0.1)),
+            hjust = -0.1, size = 3.5) +
+  facet_wrap(~ Variavel, scales = "free_y", ncol = 2) +
+  scale_x_continuous(labels = percent_format(),
+                     expand = expansion(mult = c(0, 0.2))) +
   labs(
     title = "Perfil Demográfico e Socioeconômico",
-    subtitle = "Distribuição percentual da população estimada",
-    x = NULL,
-    y = NULL
+    x = NULL, y = NULL
   ) +
   theme_minimal(base_size = 13) +
   theme(
-    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(size = 13, hjust = 0.5, color = "gray30"),
-    axis.text.y = element_text(color = "gray20", size = 10),
-    axis.text.x = element_text(size = 10),
-    panel.grid.major.y = element_blank(),
-    strip.text = element_text(face = "bold", size = 11),
-    plot.margin = margin(10, 20, 10, 10)
+    strip.text = element_text(face = "bold"),
+    plot.title = element_text(size = 15, face = "bold", hjust = 0.5)
   )
 
 ```
 
 # Relação entre Renda e os Determinantes Individuais.
 ## Renda por Escolaridade.
-```{r fig.align="center", fig.width=8, fig.height=6}
-ggplot(df, aes(x = as.factor(Grau_instrucao), y = Rendimento)) +
-  geom_boxplot(fill = "#34495e", alpha = 0.7) +
+```{r fig.align="center", fig.width=8, fig.height=5}
+library(ggplot2)
+library(RColorBrewer)
+
+ggplot(df, aes(x = as.factor(Grau_instrucao), y = Rendimento, fill = as.factor(Grau_instrucao))) +
+  geom_boxplot(alpha = 0.8) +
+  scale_fill_brewer(palette = "Set2") +  # Paleta mais suave e moderna
   labs(
     title = "Renda por Escolaridade",
     x = "Escolaridade",
@@ -111,13 +147,21 @@ ggplot(df, aes(x = as.factor(Grau_instrucao), y = Rendimento)) +
   theme_minimal(base_size = 13) +
   theme(
     plot.title = element_text(face="bold", hjust=0.5),
-    axis.text.x = element_text(angle=45, hjust=1)
+    axis.text.x = element_text(angle=45, hjust=1),
+    legend.position = "none"  # remove a legenda se quiser
   )
+
 ```
 ## Renda por Ocupação.
-```{r fig.align="center", fig.width=8, fig.height=6}
-ggplot(df, aes(x = as.factor(Cat_ocup), y = Rendimento)) +
-  geom_boxplot(fill = "#2c3e50", alpha = 0.7) +
+```{r fig.align="center", fig.width=8, fig.height=5}
+library(ggplot2)
+library(RColorBrewer)
+
+df$Cat_ocup <- as.factor(df$Cat_ocup)
+
+ggplot(df, aes(x = Cat_ocup, y = Rendimento, fill = Cat_ocup)) +
+  geom_boxplot(alpha = 0.8) +
+  scale_fill_brewer(palette = "Set2") +  # paleta suave e harmoniosa
   labs(
     title = "Renda por Ocupação",
     x = "Ocupação",
@@ -125,14 +169,19 @@ ggplot(df, aes(x = as.factor(Cat_ocup), y = Rendimento)) +
   ) +
   theme_minimal(base_size = 13) +
   theme(
-    plot.title = element_text(face="bold", hjust=0.5),
-    axis.text.x = element_text(angle=45, hjust=1)
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.text.x = element_text(size = 12, angle = 25, hjust = 1),
+    legend.position = "none"  # remove legenda se quiser
   )
 ```
 ## Renda por Renda por Idade.
-```{r fig.align="center", fig.width=8, fig.height=6}
-ggplot(df, aes(x = Faixa_Idade, y = Rendimento)) +
-  geom_boxplot(fill = "#3d566e", alpha = 0.7) +
+```{r fig.align="center", fig.width=8, fig.height=5}
+library(ggplot2)
+library(RColorBrewer)
+
+ggplot(df, aes(x = Faixa_Idade, y = Rendimento, fill = Faixa_Idade)) +
+  geom_boxplot(alpha = 0.8) +
+  scale_fill_brewer(palette = "Pastel1") +  # cores suaves e harmoniosas
   labs(
     title = "Renda por Idade",
     x = "Faixa Etária",
@@ -140,50 +189,79 @@ ggplot(df, aes(x = Faixa_Idade, y = Rendimento)) +
   ) +
   theme_minimal(base_size = 13) +
   theme(
-    plot.title = element_text(face="bold", hjust=0.5)
+    plot.title = element_text(face="bold", hjust=0.5),
+    legend.position = "none"  # remove legenda se quiser
   )
+
 ```
 ## Renda por Sexo.
-```{r fig.align="center", fig.width=7, fig.height=6}
-ggplot(df, aes(x = Sexo, y = Rendimento)) +
-  geom_boxplot(fill = "#5d6d7e", alpha = 0.75) +
-  labs(
-    title = "Renda por Sexo",
-    x = "Sexo",
-    y = "Renda (R$)"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title = element_text(face="bold", hjust=0.5)
-  )
+```{r fig.align="center", fig.width=8, fig.height=5}
+ggplot(df, aes(x = Sexo, y = Rendimento, fill = Sexo)) +
+stat_summary(fun = mean, geom = "col", alpha = 0.75, show.legend = FALSE) +
+labs(
+title = "Renda Média por Sexo",
+x = "Sexo",
+y = "Renda (R$)"
+) +
+theme_minimal(base_size = 13) +
+theme(
+plot.title = element_text(face = "bold", hjust = 0.5)
+)
+
 ```
 
 # Análise Comparada entre Regiões.
 ## Renda Média por Região
-```{r fig.align="center", fig.width=8, fig.height=6}
+```{r fig.align="center", fig.width=8, fig.height=5}
 library(dplyr)
 library(ggplot2)
+library(RColorBrewer)
+library(scales)  # para scales::dollar
 
 df %>%
   group_by(Regiao) %>%
   summarise(Renda_Media = mean(Rendimento, na.rm = TRUE)) %>%
-  ggplot(aes(x = Regiao, y = Renda_Media)) +
-  geom_col(fill = "#2c3e50", alpha = 0.8) +
+  ggplot(aes(x = Regiao, y = Renda_Media, fill = Regiao)) +
+  geom_col(alpha = 0.8) +
   geom_text(aes(label = scales::dollar(Renda_Media, prefix="R$ ", accuracy = 1)),
             vjust = -0.5, size = 4) +
+  scale_fill_brewer(palette = "Set2") +  # paleta harmoniosa
   labs(
     title = "Renda Média por Região",
     x = "Região",
     y = "Renda Média (R$)"
   ) +
   theme_minimal(base_size = 13) +
-  theme(plot.title = element_text(face="bold", hjust=0.5))
+  theme(
+    plot.title = element_text(face="bold", hjust=0.5),
+    legend.position = "none"  # remove legenda se quiser
+  )
 ```
 ## Renda Média por Escolaridade em Cada Região.
-```{r fig.align="center", fig.width=10, fig.height=7}
-ggplot(df, aes(x = Grau_instrucao, y = Rendimento, fill = Grau_instrucao)) +
-  geom_boxplot(alpha = 0.7, outlier.size = 0.8) +
+```{r fig.align="center", fig.width=8, fig.height=5}
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+
+# Garantir que é character
+df <- df %>%
+  mutate(Grau_instrucao = as.character(Grau_instrucao),
+         Grau_instrucao_curto = case_when(
+           Grau_instrucao %in% c("Sem instrução", "Menos de 1 ano de estudo ou sem instrução") ~ "Sem instrução",
+           Grau_instrucao == "Fundamental Incompleto" ~ "Fundamental Inc.",
+           Grau_instrucao == "Fundamental Completo" ~ "Fundamental Comp.",
+           Grau_instrucao == "Médio Incompleto" ~ "Médio Inc.",
+           Grau_instrucao == "Médio Completo" ~ "Médio Comp.",
+           Grau_instrucao == "Superior Incompleto" ~ "Superior Inc.",
+           Grau_instrucao == "Superior Completo" ~ "Superior Comp.",
+           TRUE ~ Grau_instrucao
+         ))
+
+# Gráfico
+ggplot(df, aes(x = Grau_instrucao_curto, y = Rendimento, fill = Grau_instrucao_curto)) +
+  geom_boxplot(alpha = 0.8, outlier.size = 0.8) +
   facet_wrap(~Regiao, scales = "free_x") +
+  scale_fill_brewer(palette = "Set3") +
   labs(
     title = "Renda por Escolaridade em Cada Região",
     x = "Escolaridade",
@@ -195,84 +273,108 @@ ggplot(df, aes(x = Grau_instrucao, y = Rendimento, fill = Grau_instrucao)) +
     legend.position = "none",
     plot.title = element_text(face="bold", hjust=0.5)
   )
+
+
 ```
 
-## Renda Média por Ocupação em cada Região.
-```{r renda_ocupacao, warning=FALSE, message=FALSE}
+## Renda Média por Ocupação em cada Região
+```{r renda_ocupacao_regiao, warning=FALSE, message=FALSE, fig.width=10, fig.height=5}
 
-library(dplyr)
 library(ggplot2)
+library(dplyr)
+library(scales)
+library(RColorBrewer)
+library(grid)  # para unit()
 
+# Agrupar e calcular renda média
 df_renda_ocup <- df %>%
-  filter(!is.na(Cat_ocup), !is.na(Rendimento)) %>%
-  group_by(Cat_ocup) %>%
-  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE)) %>%
-  arrange(Renda_Media)
+  filter(!is.na(Cat_ocup), !is.na(Rendimento), !is.na(Regiao)) %>%
+  group_by(Regiao, Cat_ocup) %>%
+  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE), .groups="drop")
 
-ggplot(df_renda_ocup,
-       aes(x = Renda_Media,
-           y = reorder(Cat_ocup, Renda_Media))) +
-  geom_col(fill = "#2c3e50") +
-  geom_text(aes(label = scales::comma(Renda_Media, accuracy = 1)),
-            hjust = -0.15, color = "black", size = 3.2) +
-  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+# Plot ajustado
+ggplot(df_renda_ocup, aes(x = Renda_Media, y = reorder(Cat_ocup, Renda_Media), fill = Cat_ocup)) +
+  geom_col(alpha = 0.85, show.legend = FALSE) +  # remove legenda desnecessária
+  facet_wrap(~ Regiao, nrow = 1, scales = "free_y") +  # escala y livre por região
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.05))) +
   labs(
-    title = "Renda Média por Ocupação",
+    title = "Renda Média por Ocupação em Cada Região",
     subtitle = "Valores estimados com base na PNAD Contínua",
     x = "Renda Média (R$)",
-    y = NULL
+    y = "Categoria Ocupacional"
   ) +
-  theme_minimal(base_size = 12) +
+  theme_minimal(base_size = 11) +
   theme(
-    axis.text.y = element_text(color = "gray20"),
-    panel.grid.major.y = element_blank(),
-    plot.title = element_text(face = "bold", size = 16),
-    plot.subtitle = element_text(size = 12)
+    strip.text = element_text(face = "bold", size = 11),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    axis.text.y = element_text(size = 9),
+    axis.text.x = element_text(size = 9),
+    panel.spacing = unit(1.5, "lines"),
+    legend.position = "none"
   )
+
 ```
 
-## Renda Média por Faixa de Idade em Cada Região.
-```{r fig.align="center", fig.width=10, fig.height=7}
-ggplot(df, aes(x = Faixa_Idade, y = Rendimento, fill = Faixa_Idade)) +
-  geom_boxplot(alpha = 0.7) +
-  facet_wrap(~Regiao) +
+## Renda Média por Faixa Etária em cada Região
+```{r renda_faixa_idade_regiao, fig.align="center", fig.width=8, fig.height=4, warning=FALSE, message=FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(RColorBrewer)
+
+df_plot <- df %>%
+  filter(!is.na(Faixa_Idade), !is.na(Rendimento), !is.na(Regiao))
+
+ggplot(df_plot, aes(x = Faixa_Idade, y = Rendimento, fill = Faixa_Idade)) +
+  geom_boxplot(alpha = 0.8, outlier.alpha = 0.25) +
+  facet_wrap(~ Regiao, nrow = 1) +
+  scale_fill_brewer(palette = "Pastel1") +  # cores suaves e harmoniosas
   labs(
-    title = "Renda por Faixa Etária em Cada Região",
+    title = "Distribuição da Renda por Faixa Etária nas Regiões do Brasil",
     x = "Faixa Etária",
     y = "Renda (R$)"
   ) +
   theme_minimal(base_size = 11) +
   theme(
-    legend.position = "none",
-    plot.title = element_text(face="bold", hjust=0.5)
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    strip.text = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 25, hjust = 1),
+    panel.spacing = unit(1, "lines"),
+    legend.position = "none"  # remove legenda se quiser
   )
+
 ```
+
 ## Renda Média por Sexo em cada Região.
-```{r renda_sexo, warning=FALSE, message=FALSE}
+```{r renda_sexo_regiao, warning=FALSE, message=FALSE}
 
 library(dplyr)
 library(ggplot2)
+library(scales)
 
-df_renda_sexo <- df %>%
-  filter(!is.na(Sexo), !is.na(Rendimento)) %>%
-  group_by(Sexo) %>%
-  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE)) %>%
-  arrange(Renda_Media)
+df_renda_sexo_regiao <- df %>%
+  filter(!is.na(Sexo), !is.na(Rendimento), !is.na(Regiao)) %>%
+  group_by(Regiao, Sexo) %>%
+  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE), .groups = "drop")
 
-ggplot(df_renda_sexo,
-       aes(x = Sexo, y = Renda_Media, fill = Sexo)) +
-  geom_col(width = 0.6, show.legend = FALSE) +
-  geom_text(aes(label = scales::comma(Renda_Media, accuracy = 1)),
-            vjust = -0.5, size = 4) +
-  scale_y_continuous(labels = scales::comma,
+ggplot(df_renda_sexo_regiao,
+       aes(x = Regiao, y = Renda_Media, fill = Sexo)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_text(aes(label = comma(Renda_Media, accuracy = 1)),
+            position = position_dodge(width = 0.7),
+            vjust = -0.4, size = 3.5) +
+  scale_y_continuous(labels = comma,
                      expand = expansion(mult = c(0, 0.1))) +
   labs(
-    title = "Renda Média por Sexo",
-    subtitle = "Estimativas com base na PNAD Contínua 2022",
-    x = NULL,
-    y = "Renda Média (R$)"
+    title = "Renda Média por Sexo e Região",
+    subtitle = "PNAD Contínua 2022",
+    x = "Região",
+    y = "Renda Média (R$)",
+    fill = "Sexo"
   ) +
-  scale_fill_manual(values = c("#2c3e50", "#34495e")) +
+  scale_fill_manual(values = c("#2c3e50", "#dbd2cbff")) +
   theme_minimal(base_size = 12) +
   theme(
     plot.title = element_text(size = 16, face = "bold"),
@@ -297,4 +399,3 @@ O gráfico reforça essa conclusão ao evidenciar a tendência crescente da linh
 # Conclusão
 
 A análise da PNAD Contínua 2022 mostrou que a renda individual varia de forma consistente com características pessoais e estruturais, como escolaridade, ocupação, idade, sexo e região. Os gráficos e estatísticas revelaram desigualdades claras entre diferentes perfis populacionais e regiões do país. A regressão linear simples confirmou que níveis mais altos de escolaridade estão associados a rendimentos maiores, reforçando o papel da educação na redução das desigualdades. Em conjunto, essas análises evidenciam a importância de políticas públicas que ampliem oportunidades educacionais e laborais, promovendo maior equidade socioeconômica no Brasil.
-
