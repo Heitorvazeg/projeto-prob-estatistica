@@ -278,41 +278,46 @@ ggplot(df, aes(x = Grau_instrucao_curto, y = Rendimento, fill = Grau_instrucao_c
 ```
 
 ## Renda Média por Ocupação em cada Região
-```{r renda_ocupacao_regiao, warning=FALSE, message=FALSE, fig.width=10, fig.height=5}
+```{r renda_ocupacao_regiao_corrigido, warning=FALSE, message=FALSE, fig.width=10, fig.height=15}
 
 library(ggplot2)
 library(dplyr)
 library(scales)
-library(RColorBrewer)
-library(grid)  # para unit()
+library(grid)
 
-# Agrupar e calcular renda média
-df_renda_ocup <- df %>%
-  filter(!is.na(Cat_ocup), !is.na(Rendimento), !is.na(Regiao)) %>%
-  group_by(Regiao, Cat_ocup) %>%
-  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE), .groups="drop")
+# (Seus dados df_renda_ocup já estão criados)
 
-# Plot ajustado
-ggplot(df_renda_ocup, aes(x = Renda_Media, y = reorder(Cat_ocup, Renda_Media), fill = Cat_ocup)) +
-  geom_col(alpha = 0.85, show.legend = FALSE) +  # remove legenda desnecessária
-  facet_wrap(~ Regiao, nrow = 1, scales = "free_y") +  # escala y livre por região
-  scale_fill_brewer(palette = "Set2") +
-  scale_x_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.05))) +
+ggplot(df_renda_ocup, aes(x = Renda_Media, y = reorder(Cat_ocup, Renda_Media))) +
+  
+  # 1. Use uma cor única. O preenchimento por categoria aqui é só ruído visual.
+  geom_col(alpha = 0.85, fill = "#0072B2") + 
+  
+  # 2. Adiciona os rótulos de Renda Média nas barras para clareza
+  geom_text(aes(label = scales::comma(Renda_Media, accuracy = 1)), 
+            hjust = -0.1,  # Posição um pouco fora da barra
+            size = 3.0) +
+  
+  # 3. A GRANDE MUDANÇA: 1 coluna, N linhas. E scales = "free" (libera X e Y)
+  facet_wrap(~ Regiao, ncol = 1, scales = "free") + 
+  
+  # 4. Ajusta a expansão do eixo X para caber os rótulos de texto
+  scale_x_continuous(labels = scales::comma, 
+                     expand = expansion(mult = c(0, 0.15))) + 
   labs(
     title = "Renda Média por Ocupação em Cada Região",
     subtitle = "Valores estimados com base na PNAD Contínua",
     x = "Renda Média (R$)",
-    y = "Categoria Ocupacional"
+    y = NULL # O eixo Y é autoexplicativo, removemos o título
   ) +
   theme_minimal(base_size = 11) +
   theme(
-    strip.text = element_text(face = "bold", size = 11),
-    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(size = 12, hjust = 0.5),
-    axis.text.y = element_text(size = 9),
-    axis.text.x = element_text(size = 9),
-    panel.spacing = unit(1.5, "lines"),
-    legend.position = "none"
+    strip.text = element_text(face = "bold", size = 12), # Título da Região
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 14, hjust = 0.5, margin = margin(b = 15)),
+    axis.text.y = element_text(size = 10),
+    axis.text.x = element_text(size = 10),
+    panel.spacing = unit(2, "lines"), # Mais espaço entre os gráficos
+    legend.position = "none" # Removemos a legenda (desnecessária)
   )
 
 ```
