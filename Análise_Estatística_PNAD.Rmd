@@ -3,10 +3,10 @@ title: "**Análise Estatística: Como a Renda dos indivíduos varia segundo esco
 subtitle: "Engenharia de Software - Probabilidade e Estatística - 2025.2"
 author: |
   | Finéias Antônio
-  | Gustavo Henrique
+  | Gustavo Henrique Gomes Barbosa
   | Heitor M Augusto Vaz
   | Túlio Vitorette
-  | Wallison Fagundes
+  | Walisson Fagundes Santana
 output: 
   pdf_document:
     latex_engine: pdflatex
@@ -18,6 +18,8 @@ library(knitr)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+library(tidyverse)
+library(readr)
 
 df <- readRDS("data/clean/pnad_2022_q4_clean.rds")
 
@@ -57,13 +59,13 @@ As principais variáveis selecionadas para análise foram:
 - **Sexo (V2007)**  
 - **Idade (V2009)**  
 - **Nível de Escolaridade (V3002 / VD3004 recodificada)**  
-- **Condição Ocupacional (VD4002)**  
 - **Setor/Grupo Ocupacional (VD4012 ou VD4010)**  
 - **Horas Semanais Trabalhadas (VD4015/VD4019)**  
 - **Rendimento do Trabalho (VD4030 ou VD4010)**  
-- **Região - derivada da UF**
-- **Faixa Idade - Derivada da Idade**
+- **Região** — derivada da UF  
+- **Faixa Idade** — derivada da Idade  
 - **Anos de Estudo (VD3006)**
+
 
 # Tratamento e Limpeza de Dados
 
@@ -130,6 +132,10 @@ ggplot(df_plot, aes(x = Prop, y = reorder(Categoria, Prop))) +
 
 ```
 
+A amostra estudada pela PNAD Contínua 2022 é composta majoritariamente por Homens (57.7%) em comparação com Mulheres (42.3%). A distribuição por Faixa Etária revela que a maior parte da população está concentrada na fase de maior produtividade: Adulto (25-59 anos), com 77.3%. Os indivíduos Jovens (0-24) representam 13.6% e os Idosos (60+) compõem 9.0%
+
+O perfil sociodemográfico estabelecido demonstra que a força de trabalho brasileira é majoritariamente adulta e masculina, com a escolaridade concentrada no nível médio. Esta estrutura de base é fundamental para interpretar a análise de renda: a pequena proporção de indivíduos com ensino superior (20.2% com Superior completo) ajuda a explicar a alta recompensa salarial desse grupo em gráficos subsequentes, enquanto as disparidades de gênero e regionais (concentração no Sudeste/Nordeste) estabelecem o contexto das desigualdades salariais analisadas nas seções posteriores.
+
 # Relação entre Renda e os Determinantes Individuais.
 ## Renda por Escolaridade.
 ```{r fig.align="center", fig.width=8, fig.height=5}
@@ -152,28 +158,73 @@ ggplot(df, aes(x = as.factor(Grau_instrucao), y = Rendimento, fill = as.factor(G
   )
 
 ```
+
+**Efeito do Nível Educacional sobre a Renda**:
+ A renda aumenta conforme cresce a escolaridade, pois maiores níveis educacionais tendem a elevar a
+ produtividade e melhorar o acesso a ocupações de maior qualificação.
+
 ## Renda por Ocupação.
 ```{r fig.align="center", fig.width=8, fig.height=5}
+library(dplyr)
 library(ggplot2)
 library(RColorBrewer)
+library(stringr)
 
-df$Cat_ocup <- as.factor(df$Cat_ocup)
+# Mapear Cat_ocup para nomes curtos usando regex
+df <- df %>%
+  mutate(
+    Cat_ocup_curta = case_when(
+      str_detect(Cat_ocup, regex("diretor|gerente", ignore_case = TRUE)) ~ "Diretores/Gerentes",
+      str_detect(Cat_ocup, regex("ciências|intelectuais", ignore_case = TRUE)) ~ "Prof. Ciências/Intelectuais",
+      str_detect(Cat_ocup, regex("técnico|nível médio", ignore_case = TRUE)) ~ "Técnicos/Nível Médio",
+      str_detect(Cat_ocup, regex("apoio administrativo", ignore_case = TRUE)) ~ "Apoio Administrativo",
+      str_detect(Cat_ocup, regex("serviços|vendas", ignore_case = TRUE)) ~ "Serviços/Vendas",
+      str_detect(Cat_ocup, regex("agricultura|pecuária|pesca", ignore_case = TRUE)) ~ "Agricultura/Pecuária/Pesca",
+      str_detect(Cat_ocup, regex("construção", ignore_case = TRUE)) ~ "Construção",
+      str_detect(Cat_ocup, regex("máquinas|mecânico", ignore_case = TRUE)) ~ "Oper. Máquinas/Mecânicos",
+      str_detect(Cat_ocup, regex("elementar", ignore_case = TRUE)) ~ "Ocupações Elementares",
+      str_detect(Cat_ocup, regex("militar|polícia|bombeiro", ignore_case = TRUE)) ~ "Militares/Polícia/Bombeiros",
+      str_detect(Cat_ocup, regex("não classificada|outros", ignore_case = TRUE)) ~ "Ocupações Não Classificadas",
+      TRUE ~ "Outros"
+    ),
+    Cat_ocup_curta = factor(Cat_ocup_curta, levels = c(
+      "Diretores/Gerentes",
+      "Prof. Ciências/Intelectuais",
+      "Técnicos/Nível Médio",
+      "Apoio Administrativo",
+      "Serviços/Vendas",
+      "Agricultura/Pecuária/Pesca",
+      "Construção",
+      "Oper. Máquinas/Mecânicos",
+      "Ocupações Elementares",
+      "Militares/Polícia/Bombeiros",
+      "Ocupações Não Classificadas",
+      "Outros"
+    ))
+  )
 
-ggplot(df, aes(x = Cat_ocup, y = Rendimento, fill = Cat_ocup)) +
+# Boxplot
+ggplot(df, aes(x = Cat_ocup_curta, y = Rendimento, fill = Cat_ocup_curta)) +
   geom_boxplot(alpha = 0.8) +
-  scale_fill_brewer(palette = "Set2") +  # paleta suave e harmoniosa
+  scale_fill_brewer(palette = "Set3") +
   labs(
-    title = "Renda por Ocupação",
-    x = "Ocupação",
+    title = "Renda por Ocupação (VD4011)",
+    x = "Categoria Ocupacional",
     y = "Renda (R$)"
   ) +
   theme_minimal(base_size = 13) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5),
-    axis.text.x = element_text(size = 12, angle = 25, hjust = 1),
-    legend.position = "none"  # remove legenda se quiser
+    axis.text.x = element_text(size = 11, angle = 25, hjust = 1),
+    legend.position = "none"
   )
+
 ```
+
+**Diferenças Ocupacionais nos Rendimentos**:
+ Ocupações mais qualificadas ou de maior complexidade apresentam rendas superiores, refletindo
+ maior produtividade e maior valorização no mercado de trabalho.
+
 ## Renda por Renda por Idade.
 ```{r fig.align="center", fig.width=8, fig.height=5}
 library(ggplot2)
@@ -194,6 +245,11 @@ ggplot(df, aes(x = Faixa_Idade, y = Rendimento, fill = Faixa_Idade)) +
   )
 
 ```
+
+**Ciclo de Vida e Evolução da Renda**:
+ A renda tende a subir com a idade devido ao acúmulo de experiência e estabilização profissional, até
+ certo ponto em que se estabiliza ou diminui.
+
 ## Renda por Sexo.
 ```{r fig.align="center", fig.width=8, fig.height=5}
 ggplot(df, aes(x = Sexo, y = Rendimento, fill = Sexo)) +
@@ -209,6 +265,9 @@ plot.title = element_text(face = "bold", hjust = 0.5)
 )
 
 ```
+**Desigualdade Salarial entre Homens e Mulheres**:
+ Homens apresentam renda média maior, refletindo desigualdades estruturais no acesso a posições e
+ retornos do trabalho.
 
 # Análise Comparada entre Regiões.
 ## Renda Média por Região
@@ -237,33 +296,61 @@ df %>%
     legend.position = "none"  # remove legenda se quiser
   )
 ```
+
+O gráfico de barras da Renda Média por Região demonstra a grande disparidade econômica entre as macrorregiões do Brasil. As regiões Sul (R$ 2.876) e Centro-Oeste (R$ 2.838) apresentam as maiores médias de rendimento. Em contraste, o Nordeste tem a renda média mais baixa, com apenas R$ 1.597, e o Norte fica na penúltima posição, com R$ 2.086.
+
 ## Renda Média por Escolaridade em Cada Região.
-```{r fig.align="center", fig.width=8, fig.height=5}
+```{r fig.align="center", fig.width=13, fig.height=7}
+# Pacotes necessários
 library(dplyr)
 library(ggplot2)
 library(RColorBrewer)
+library(scales)
+library(stringr)
+library(grid)  # para unit()
 
-# Garantir que é character
+# Garantir que Rendimento seja numérico
 df <- df %>%
-  mutate(Grau_instrucao = as.character(Grau_instrucao),
-         Grau_instrucao_curto = case_when(
-           Grau_instrucao %in% c("Sem instrução", "Menos de 1 ano de estudo ou sem instrução") ~ "Sem instrução",
-           Grau_instrucao == "Fundamental Incompleto" ~ "Fundamental Inc.",
-           Grau_instrucao == "Fundamental Completo" ~ "Fundamental Comp.",
-           Grau_instrucao == "Médio Incompleto" ~ "Médio Inc.",
-           Grau_instrucao == "Médio Completo" ~ "Médio Comp.",
-           Grau_instrucao == "Superior Incompleto" ~ "Superior Inc.",
-           Grau_instrucao == "Superior Completo" ~ "Superior Comp.",
-           TRUE ~ Grau_instrucao
-         ))
+  mutate(Rendimento = as.numeric(Rendimento))
 
-# Gráfico
-ggplot(df, aes(x = Grau_instrucao_curto, y = Rendimento, fill = Grau_instrucao_curto)) +
-  geom_boxplot(alpha = 0.8, outlier.size = 0.8) +
-  facet_wrap(~Regiao, scales = "free_x") +
+# Criar categoria curta de escolaridade usando correspondência por texto
+df <- df %>%
+  mutate(
+    Grau_instrucao_curto = case_when(
+      str_detect(Grau_instrucao, regex("sem instrução|menos de 1 ano", ignore_case = TRUE)) ~ "Sem instrução",
+      str_detect(Grau_instrucao, regex("fundamental incompleto", ignore_case = TRUE)) ~ "Fundamental Inc.",
+      str_detect(Grau_instrucao, regex("fundamental completo", ignore_case = TRUE)) ~ "Fundamental Comp.",
+      str_detect(Grau_instrucao, regex("médio incompleto", ignore_case = TRUE)) ~ "Médio Inc.",
+      str_detect(Grau_instrucao, regex("médio completo", ignore_case = TRUE)) ~ "Médio Comp.",
+      str_detect(Grau_instrucao, regex("superior incompleto", ignore_case = TRUE)) ~ "Superior Inc.",
+      str_detect(Grau_instrucao, regex("superior completo", ignore_case = TRUE)) ~ "Superior Comp.",
+      TRUE ~ NA_character_  # ignora valores não mapeados
+    ),
+    Grau_instrucao_curto = factor(
+      Grau_instrucao_curto,
+      levels = c("Sem instrução", "Fundamental Inc.", "Fundamental Comp.",
+                 "Médio Inc.", "Médio Comp.", "Superior Inc.", "Superior Comp.")
+    )
+  )
+
+# Filtrar apenas linhas válidas
+df_plot <- df %>% filter(!is.na(Rendimento), !is.na(Grau_instrucao_curto), !is.na(Regiao))
+
+# Calcular média por categoria e região
+df_summary <- df_plot %>%
+  group_by(Regiao, Grau_instrucao_curto) %>%
+  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE), .groups = "drop")
+
+# Criar gráfico horizontal com rótulos fora da barra
+ggplot(df_summary, aes(x = Grau_instrucao_curto, y = Renda_Media, fill = Grau_instrucao_curto)) +
+  geom_col(alpha = 0.8) +
+  geom_text(aes(label = scales::dollar(Renda_Media, prefix="R$ ", accuracy = 1)),
+            hjust = -0.1, size = 3) +  # rótulo fora da barra
+  facet_wrap(~Regiao, scales = "free_y") +
+  coord_flip() +  # barras horizontais
   scale_fill_brewer(palette = "Set3") +
   labs(
-    title = "Renda por Escolaridade em Cada Região",
+    title = "Renda Média por Escolaridade em Cada Região",
     x = "Escolaridade",
     y = "Renda (R$)"
   ) +
@@ -278,46 +365,41 @@ ggplot(df, aes(x = Grau_instrucao_curto, y = Rendimento, fill = Grau_instrucao_c
 ```
 
 ## Renda Média por Ocupação em cada Região
-```{r renda_ocupacao_regiao_corrigido, warning=FALSE, message=FALSE, fig.width=10, fig.height=15}
+```{r renda_ocupacao_regiao, warning=FALSE, message=FALSE, fig.width=10, fig.height=5}
 
 library(ggplot2)
 library(dplyr)
 library(scales)
-library(grid)
+library(RColorBrewer)
+library(grid)  # para unit()
 
-# (Seus dados df_renda_ocup já estão criados)
+# Agrupar e calcular renda média
+df_renda_ocup <- df %>%
+  filter(!is.na(Cat_ocup), !is.na(Rendimento), !is.na(Regiao)) %>%
+  group_by(Regiao, Cat_ocup) %>%
+  summarise(Renda_Media = mean(Rendimento, na.rm = TRUE), .groups="drop")
 
-ggplot(df_renda_ocup, aes(x = Renda_Media, y = reorder(Cat_ocup, Renda_Media))) +
-  
-  # 1. Use uma cor única. O preenchimento por categoria aqui é só ruído visual.
-  geom_col(alpha = 0.85, fill = "#0072B2") + 
-  
-  # 2. Adiciona os rótulos de Renda Média nas barras para clareza
-  geom_text(aes(label = scales::comma(Renda_Media, accuracy = 1)), 
-            hjust = -0.1,  # Posição um pouco fora da barra
-            size = 3.0) +
-  
-  # 3. A GRANDE MUDANÇA: 1 coluna, N linhas. E scales = "free" (libera X e Y)
-  facet_wrap(~ Regiao, ncol = 1, scales = "free") + 
-  
-  # 4. Ajusta a expansão do eixo X para caber os rótulos de texto
-  scale_x_continuous(labels = scales::comma, 
-                     expand = expansion(mult = c(0, 0.15))) + 
+# Plot ajustado
+ggplot(df_renda_ocup, aes(x = Renda_Media, y = reorder(Cat_ocup, Renda_Media), fill = Cat_ocup)) +
+  geom_col(alpha = 0.85, show.legend = FALSE) +  # remove legenda desnecessária
+  facet_wrap(~ Regiao, nrow = 1, scales = "free_y") +  # escala y livre por região
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.05))) +
   labs(
     title = "Renda Média por Ocupação em Cada Região",
     subtitle = "Valores estimados com base na PNAD Contínua",
     x = "Renda Média (R$)",
-    y = NULL # O eixo Y é autoexplicativo, removemos o título
+    y = "Categoria Ocupacional"
   ) +
   theme_minimal(base_size = 11) +
   theme(
-    strip.text = element_text(face = "bold", size = 12), # Título da Região
-    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(size = 14, hjust = 0.5, margin = margin(b = 15)),
-    axis.text.y = element_text(size = 10),
-    axis.text.x = element_text(size = 10),
-    panel.spacing = unit(2, "lines"), # Mais espaço entre os gráficos
-    legend.position = "none" # Removemos a legenda (desnecessária)
+    strip.text = element_text(face = "bold", size = 11),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    axis.text.y = element_text(size = 9),
+    axis.text.x = element_text(size = 9),
+    panel.spacing = unit(1.5, "lines"),
+    legend.position = "none"
   )
 
 ```
@@ -351,6 +433,8 @@ ggplot(df_plot, aes(x = Faixa_Idade, y = Rendimento, fill = Faixa_Idade)) +
   )
 
 ```
+
+Os boxplots agrupados por região mostram o Ciclo de Renda por Idade no contexto geográfico. O padrão de aumento da renda com a idade se mantém, com Adultos (25-59) e Idosos (60+) ganhando mais do que os Jovens em todas as macrorregiões. No entanto, o gráfico claramente ilustra que o Nordeste apresenta a menor mediana de renda em todas as faixas etárias, enquanto o Sul e o Centro-Oeste exibem as medianas mais altas para os adultos, evidenciando que as desvantagens regionais persistem ao longo de toda a vida produtiva.
 
 ## Renda Média por Sexo em cada Região.
 ```{r renda_sexo_regiao, warning=FALSE, message=FALSE}
@@ -386,50 +470,13 @@ ggplot(df_renda_sexo_regiao,
     plot.subtitle = element_text(size = 12)
   )
 ```
+Este gráfico de barras agrupadas quantifica a Desigualdade Salarial de Gênero entre Regiões. A análise é clara: a renda média dos Homens é superior à das Mulheres em todas as cinco macrorregiões. Os maiores diferenciais absolutos são observados nas regiões de maior renda geral, como o Centro-Oeste (R$ 3.077 vs R$ 2.520) e o Sul (R$ 3.107 vs R$ 2.578). O Nordeste tem o menor diferencial absoluto, mas é a região com a renda mais baixa para ambos os sexos, confirmando que a desigualdade de gênero é uma característica onipresente, variando em intensidade regional.
 
 # Regressão Linear
 
 A escolaridade é amplamente reconhecida como um dos principais determinantes da renda, conforme discutido na literatura econômica do capital humano. Indivíduos com maior nível de instrução tendem a apresentar maior produtividade, o que se reflete em salários mais elevados. Para verificar empiricamente essa relação utilizando os microdados da PNAD Contínua 2022, estimamos uma regressão linear simples em que o rendimento individual é explicado apenas pela escolaridade.
 
-## Modelo Sugerido
-
 ## Gráfico da Regressão Linear
-
-``` {r GraficoRegressaoLinear, fig.width=10, fig.height=6, warning=FALSE, message=FALSE}
-library(tidyverse)
-library(readr)
-cor_pontos <- "grey40"
-y_lim <- quantile(df$Rendimento, 0.99, na.rm = TRUE)
-
-
-ggplot(data = df, aes(x = Anos_estudo, y = Rendimento)) +
-  
-  geom_jitter(
-    data = df %>% sample_n(2500), 
-    width = 0.49,   
-    alpha = 0.4,   
-    size = 1.0,
-    color = "grey40"
-  ) +
-  geom_smooth(method = "lm", color = "black", se = TRUE) +
-  coord_cartesian(ylim = c(0, y_lim)) +
-  labs(
-    title = "Regressão Linear: Rendimento vs. Anos de Estudo",
-    x = "Anos de Estudo",
-    y = "Rendimento (R$)",
-    caption = "Dados: PNAD Contínua 2022 Q4"
-  ) +
-  theme_bw() +
-  
-  theme(
-    plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
-    axis.title.x = element_text(size = 12, face = "bold"),
-    axis.title.y = element_text(size = 12, face = "bold"),
-    axis.text = element_text(size = 10),
-    panel.grid.minor = element_blank(),
-    panel.background = element_rect(fill = "grey98") 
-  )
-```
 
 ## Interpretação
 
@@ -440,3 +487,14 @@ O gráfico reforça essa conclusão ao evidenciar a tendência crescente da linh
 # Conclusão
 
 A análise da PNAD Contínua 2022 mostrou que a renda individual varia de forma consistente com características pessoais e estruturais, como escolaridade, ocupação, idade, sexo e região. Os gráficos e estatísticas revelaram desigualdades claras entre diferentes perfis populacionais e regiões do país. A regressão linear simples confirmou que níveis mais altos de escolaridade estão associados a rendimentos maiores, reforçando o papel da educação na redução das desigualdades. Em conjunto, essas análises evidenciam a importância de políticas públicas que ampliem oportunidades educacionais e laborais, promovendo maior equidade socioeconômica no Brasil.
+
+**Referências**
+
+EHRENBERG, Ronald; SMITH, Robert.  
+Economia do Trabalho. 12. ed. São Paulo: Pearson, 2018.  
+
+SNOWDON, Brian; VANE, Howard.  
+Modern Macroeconomics: Its Origins, Development and Current State. Cheltenham: Edward Elgar, 2005.  
+
+BRASIL. Instituto Brasileiro de Geografia e Estatística.  
+Pesquisa Nacional por Amostra de Domicílios Contínua (PNAD Contínua) 2022. Microdados. Rio de Janeiro: IBGE, 2023. Disponível em: <https://www.ibge.gov.br/estatisticas/sociais/trabalho/9173-pnad-continua.html>. Acesso em: 17 nov. 2025.
