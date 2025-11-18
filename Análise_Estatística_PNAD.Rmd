@@ -18,6 +18,8 @@ library(knitr)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+library(tidyverse)
+library(readr)
 
 df <- readRDS("data/clean/pnad_2022_q4_clean.rds")
 
@@ -389,6 +391,31 @@ A escolaridade é amplamente reconhecida como um dos principais determinantes da
 ## Modelo Sugerido
 
 ## Gráfico da Regressão Linear
+
+``` {r GraficoRegressaoLinear, fig.width=10, fig.height=6, warning=FALSE, message=FALSE}
+
+y_lim <- quantile(df$Rendimento, 0.99, na.rm = TRUE)
+
+
+ggplot(data = df, aes(x = Anos_estudo, y = Rendimento)) +
+  
+  geom_jitter(
+    data = df %>% sample_n(5000), 
+    width = 0.2,   
+    alpha = 0.3,   
+    size = 1.5,
+    color = "blue"
+  ) +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  coord_cartesian(ylim = c(0, y_lim)) +
+  labs(
+    title = "Regressão Linear: Rendimento vs. Anos de Estudo",
+    x = "Anos de Estudo",
+    y = "Rendimento (R$)",
+    caption = "Dados: PNAD Contínua 2022 Q4"
+  ) +
+  theme_minimal()
+```
 
 ## Interpretação
 
